@@ -2,8 +2,8 @@ import streamlit as st
 import hmac
 import pandas as pd
 import json
-import anthropic
 import os
+import requests
 from io import StringIO
 import docx2txt
 import PyPDF2
@@ -56,7 +56,6 @@ def check_password():
 
 if not check_password():
     st.stop()
-    
 
 # Set page configuration
 st.set_page_config(
@@ -240,15 +239,52 @@ def extract_budget_info(documents_content):
     
     return budget_data
 
+def call_claude_api(api_key, prompt, model="claude-3-sonnet-20240229"):
+    """Call the Claude API directly using requests"""
+    url = "https://api.anthropic.com/v1/messages"
+    
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01"
+    }
+    
+    data = {
+        "model": model,
+        "max_tokens": 4000,
+        "temperature": 0,
+        "system": "You are a project management expert analyzing project documentation. Provide clear, objective analysis based only on the facts presented.",
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code != 200:
+            st.error(f"API Error: {response.status_code}")
+            st.error(response.text)
+            return None
+            
+        response_json = response.json()
+        if 'content' in response_json and len(response_json['content']) > 0:
+            return response_json['content'][0]['text']
+        else:
+            st.error("Empty response from API")
+            return None
+    except Exception as e:
+        st.error(f"Error calling Claude API: {str(e)}")
+        return None
+
 def analyze_project_with_claude(api_key, documents_content):
     """Send project documents to Claude for analysis."""
     # Define budget_data initially to avoid UnboundLocalError
     budget_data = extract_budget_info(documents_content)
     
     try:
-        # Create client without extra parameters that might cause issues
-        client = anthropic.Client(api_key=api_key)
-        
         # Prepare documents for Claude
         docs_formatted = ""
         for filename, content in documents_content.items():
@@ -306,45 +342,41 @@ def analyze_project_with_claude(api_key, documents_content):
         {docs_formatted}
         """
         
-        # Call Claude API
+        # Get model from secrets if available
         model = "claude-3-sonnet-20240229"
-        # Try to use model from secrets if available
         try:
             if "ANTHROPIC_MODEL" in st.secrets:
                 model = st.secrets["ANTHROPIC_MODEL"]
         except:
             pass
             
-        response = client.completion(
-            prompt=f"\n\nHuman: {prompt}\n\nAssistant:",
-            model=model,
-            max_tokens_to_sample=4000,
-            temperature=0
-        )
+        # Make a direct API call to Claude
+        response_text = call_claude_api(api_key, prompt, model)
         
-        # Extract and parse JSON from response
-        response_text = response.completion
-        
-        # Look for JSON object in the response
-        json_start = response_text.find('{')
-        json_end = response_text.rfind('}') + 1
-        
-        if json_start >= 0 and json_end > json_start:
-            json_str = response_text[json_start:json_end]
-            try:
-                analysis_results = json.loads(json_str)
-                return analysis_results, budget_data
-            except json.JSONDecodeError:
-                st.error("Failed to parse Claude's JSON response")
-                st.text(json_str)
+        if response_text:
+            # Look for JSON object in the response
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+                try:
+                    analysis_results = json.loads(json_str)
+                    return analysis_results, budget_data
+                except json.JSONDecodeError:
+                    st.error("Failed to parse Claude's JSON response")
+                    st.text(json_str)
+                    return None, budget_data
+            else:
+                st.error("Claude did not return a proper JSON response")
+                st.text(response_text)
                 return None, budget_data
         else:
-            st.error("Claude did not return a proper JSON response")
-            st.text(response_text)
+            st.error("Failed to get a valid response from Claude API")
             return None, budget_data
             
     except Exception as e:
-        st.error(f"Error calling Claude API: {str(e)}")
+        st.error(f"Error in project analysis process: {str(e)}")
         return None, budget_data
 
 def display_results(analysis_results, budget_data):

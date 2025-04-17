@@ -7,13 +7,14 @@ import json
 import anthropic
 import base64
 import io
+import os
+import pickle
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.dates as mdates
 from io import BytesIO
 
-# --- Authentication Code (Unchanged) ---
 def check_password():
     """Returns `True` if the user had a correct password."""
 
@@ -58,7 +59,6 @@ def check_password():
 
 if not check_password():
     st.stop()
-  
 
 
 # Set page configuration
@@ -117,6 +117,66 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Path for saving and loading project data
+PROJECT_SAVE_PATH = "project_data.pkl"
+
+# Function to save project data to file
+def save_project_data():
+    data_to_save = {
+        'project_info': st.session_state.project_info,
+        'tasks': st.session_state.tasks,
+        'current_task_id': st.session_state.current_task_id,
+        'anthropic_api_key': st.session_state.get('anthropic_api_key', '')
+    }
+    
+    try:
+        with open(PROJECT_SAVE_PATH, 'wb') as file:
+            pickle.dump(data_to_save, file)
+        return True
+    except Exception as e:
+        st.error(f"Error saving project data: {str(e)}")
+        return False
+
+# Function to load project data from file
+def load_project_data():
+    if os.path.exists(PROJECT_SAVE_PATH):
+        try:
+            with open(PROJECT_SAVE_PATH, 'rb') as file:
+                data = pickle.load(file)
+                
+                # Update session state with loaded data
+                st.session_state.project_info = data['project_info']
+                
+                # Convert dates back to datetime.date objects if they're strings
+                if isinstance(st.session_state.project_info['start_date'], str):
+                    st.session_state.project_info['start_date'] = datetime.datetime.strptime(
+                        st.session_state.project_info['start_date'], '%Y-%m-%d').date()
+                if isinstance(st.session_state.project_info['end_date'], str):
+                    st.session_state.project_info['end_date'] = datetime.datetime.strptime(
+                        st.session_state.project_info['end_date'], '%Y-%m-%d').date()
+                
+                # Load tasks DataFrame
+                st.session_state.tasks = data['tasks']
+                
+                # Convert dates in tasks DataFrame if needed
+                if not st.session_state.tasks.empty:
+                    date_columns = ['Start Date', 'End Date']
+                    for col in date_columns:
+                        if col in st.session_state.tasks.columns and st.session_state.tasks[col].dtype == 'object':
+                            st.session_state.tasks[col] = pd.to_datetime(st.session_state.tasks[col]).dt.date
+                
+                st.session_state.current_task_id = data['current_task_id']
+                
+                # Restore API key if it exists
+                if 'anthropic_api_key' in data:
+                    st.session_state.anthropic_api_key = data['anthropic_api_key']
+                
+                return True
+        except Exception as e:
+            st.error(f"Error loading project data: {str(e)}")
+            return False
+    return False
+
 # Initialize session state variables if they don't exist
 if 'project_info' not in st.session_state:
     st.session_state.project_info = {
@@ -148,6 +208,15 @@ if 'ai_generated_plan' not in st.session_state:
     
 if 'ai_loading' not in st.session_state:
     st.session_state.ai_loading = False
+    
+if 'data_loaded' not in st.session_state:
+    st.session_state.data_loaded = False
+
+# Try to load saved project data at startup
+if not st.session_state.data_loaded:
+    load_success = load_project_data()
+    if load_success:
+        st.session_state.data_loaded = True
 
 # Anthropic API Client
 def get_anthropic_client():
@@ -686,10 +755,23 @@ def import_ai_tasks():
         st.session_state.ai_generated_plan = ""
         st.success("AI-generated tasks imported successfully!")
 
+# Save project button callback
+def save_project():
+    success = save_project_data()
+    if success:
+        st.success("Project saved successfully!")
+    else:
+        st.error("Failed to save project. Please try again.")
+
 # Main application
 def main():
     # Title
     st.markdown('<div class="main-header">Project Planning Assistant</div>', unsafe_allow_html=True)
+    
+    # Add Save Project button to the top right
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        st.button("💾 Save Project", on_click=save_project, type="primary")
     
     # Create tabs
     tabs = st.tabs(["Project Definition", "Tasks & Timeline", "Visualizations", "Export", "Claude AI Assistant"])
@@ -866,7 +948,7 @@ def main():
     with tabs[3]:
         st.markdown('<div class="section-header">Export Project Plan</div>', unsafe_allow_html=True)
         
-        export_tabs = st.tabs(["Excel Export", "MS Project Export", "CSV Export"])
+        export_tabs = st.tabs(["Excel Export", "MS Project Export", "CSV Export", "Save & Load"])
         
         with export_tabs[0]:
             st.markdown('<div class="subsection-header">Export to Excel</div>', unsafe_allow_html=True)
@@ -899,6 +981,58 @@ def main():
                     download_button(st.session_state.tasks, "project_tasks.csv", "📥 Download CSV File"),
                     unsafe_allow_html=True
                 )
+        
+        with export_tabs[3]:
+            st.markdown('<div class="subsection-header">Save & Load Project</div>', unsafe_allow_html=True)
+            st.markdown('<div class="instruction-text">Save your current project to a file or load a previously saved project.</div>', unsafe_allow_html=True)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("💾 Save Project to File", type="primary"):
+                    save_success = save_project_data()
+                    if save_success:
+                        st.success(f"Project saved successfully to {PROJECT_SAVE_PATH}!")
+                    else:
+                        st.error("Failed to save project. Please try again.")
+            
+            with col2:
+                if st.button("📂 Load Project from File", type="primary"):
+                    load_success = load_project_data()
+                    if load_success:
+                        st.success("Project loaded successfully!")
+                        st.session_state.data_loaded = True
+                    else:
+                        st.error(f"Failed to load project from {PROJECT_SAVE_PATH}. Make sure the file exists.")
+            
+            # Add option to download the project file
+            if os.path.exists(PROJECT_SAVE_PATH):
+                with open(PROJECT_SAVE_PATH, 'rb') as file:
+                    project_data = file.read()
+                    
+                st.markdown(
+                    download_button(project_data, "project_data.pkl", "📥 Download Project File"),
+                    unsafe_allow_html=True
+                )
+                
+            # Add option to upload a project file
+            uploaded_file = st.file_uploader("Upload Project File", type=['pkl'])
+            if uploaded_file is not None:
+                try:
+                    # Save uploaded file
+                    with open(PROJECT_SAVE_PATH, 'wb') as file:
+                        file.write(uploaded_file.getvalue())
+                    
+                    # Load the saved file
+                    load_success = load_project_data()
+                    if load_success:
+                        st.success("Project uploaded and loaded successfully!")
+                        st.session_state.data_loaded = True
+                        st.experimental_rerun()  # Refresh the app to show loaded data
+                    else:
+                        st.error("Failed to load the uploaded project file.")
+                except Exception as e:
+                    st.error(f"Error processing the uploaded file: {str(e)}")
     
     # Tab 5: Claude AI Assistant
     with tabs[4]:

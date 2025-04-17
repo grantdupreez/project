@@ -418,17 +418,31 @@ def display_results(analysis_results, budget_data):
         
         # Objective Setting Score
         obj_score = analysis_results.get("objective_setting_score", 0)
+        
+        # Create the metric box with score and reasoning
         st.markdown(f"""<div class="metric-box">
                       <h3>Objective Setting Quality</h3>
                       <p class="{get_score_class(obj_score)}">Score: {obj_score}/10</p>
                       <p>{analysis_results.get('objective_setting_reasoning', '')}</p>
-                      
-                      <h4>Good Objectives:</h4>
-                      <ul>{"".join([f"<li>{example}</li>" for example in analysis_results.get('objective_examples', {}).get('good', [])])}</ul>
-                      
-                      <h4>Poor Objectives:</h4>
-                      <ul>{"".join([f"<li>{example}</li>" for example in analysis_results.get('objective_examples', {}).get('poor', [])])}</ul>
                     </div>""", unsafe_allow_html=True)
+        
+        # Handle good objectives list with proper formatting
+        st.subheader("Good Objectives:")
+        good_objectives = analysis_results.get('objective_examples', {}).get('good', [])
+        if good_objectives:
+            for example in good_objectives:
+                st.markdown(f"- {example}")
+        else:
+            st.markdown("No good objectives identified.")
+            
+        # Handle poor objectives list with proper formatting
+        st.subheader("Poor Objectives:")
+        poor_objectives = analysis_results.get('objective_examples', {}).get('poor', [])
+        if poor_objectives:
+            for example in poor_objectives:
+                st.markdown(f"- {example}")
+        else:
+            st.markdown("No poor objectives identified.")
         
         # Planning Quality Score
         plan_score = analysis_results.get("planning_quality_score", 0)
@@ -443,22 +457,24 @@ def display_results(analysis_results, budget_data):
         # Scope Creep Items
         st.markdown("""<div class="metric-box">
                       <h3>Scope Creep Items</h3>
-                      <ul>""", unsafe_allow_html=True)
+                    </div>""", unsafe_allow_html=True)
         
-        for item in analysis_results.get("scope_creep_items", []):
-            st.markdown(f"<li>{item}</li>", unsafe_allow_html=True)
-        
-        st.markdown("</ul></div>", unsafe_allow_html=True)
+        scope_creep_items = analysis_results.get("scope_creep_items", [])
+        if scope_creep_items:
+            for item in scope_creep_items:
+                st.markdown(f"- {item}")
+        else:
+            st.markdown("No scope creep items identified.")
         
         # Top Risks and Issues
         st.markdown("""<div class="metric-box">
                       <h3>Top Risks and Issues</h3>
-                      <ol>""", unsafe_allow_html=True)
+                    </div>""", unsafe_allow_html=True)
         
-        for item in analysis_results.get("top_risks_issues", []):
-            st.markdown(f"<li>{item}</li>", unsafe_allow_html=True)
-        
-        st.markdown("</ol></div>", unsafe_allow_html=True)
+        top_risks = analysis_results.get("top_risks_issues", [])
+        if top_risks:
+            for i, item in enumerate(top_risks, 1):
+                st.markdown(f"{i}. {item}")
         
         # Budget Analysis
         st.markdown("""<div class="metric-box">

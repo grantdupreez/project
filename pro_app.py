@@ -242,6 +242,9 @@ def extract_budget_info(documents_content):
 
 def analyze_project_with_claude(api_key, documents_content):
     """Send project documents to Claude for analysis."""
+    # Define budget_data initially to avoid UnboundLocalError
+    budget_data = extract_budget_info(documents_content)
+    
     try:
         # Create client without extra parameters that might cause issues
         client = anthropic.Client(api_key=api_key)
@@ -251,9 +254,6 @@ def analyze_project_with_claude(api_key, documents_content):
         for filename, content in documents_content.items():
             doc_type = categorize_document(filename, content)
             docs_formatted += f"\n\n--- DOCUMENT: {filename} (Type: {doc_type}) ---\n{content[:10000]}"  # Limiting content length
-        
-        # Extract budget information separately for more detailed analysis
-        budget_data = extract_budget_info(documents_content)
         
         budget_info = ""
         if budget_data["total_budget"] is not None:

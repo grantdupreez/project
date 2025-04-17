@@ -12,7 +12,6 @@ import time
 import re
 from datetime import datetime
 
-# --- Authentication Code (Unchanged) ---
 def check_password():
     """Returns `True` if the user had a correct password."""
 
@@ -309,7 +308,8 @@ def analyze_project_with_claude(api_key, documents_content):
     try:
         response = client.completion(
             prompt=f"\n\nHuman: {prompt}\n\nAssistant:",
-            model="claude-3-sonnet-20240229",
+#            model="claude-3-sonnet-20240229",
+            model=st.secrets["ANTHROPIC_MODEL"],
             max_tokens_to_sample=4000,
             temperature=0
         )
@@ -457,7 +457,7 @@ st.markdown("Upload project documents to analyze key project management indicato
 # Sidebar for API Key
 with st.sidebar:
     st.header("Configuration")
-    api_key = st.text_input("Anthropic API Key", value=st.session_state.api_key, type="password")
+    api_key = st.secrets["ANTHROPIC_API_KEY"]
     
     if api_key != st.session_state.api_key:
         st.session_state.api_key = api_key

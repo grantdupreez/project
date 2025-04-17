@@ -242,74 +242,82 @@ def extract_budget_info(documents_content):
 
 def analyze_project_with_claude(api_key, documents_content):
     """Send project documents to Claude for analysis."""
-    client = anthropic.Client(api_key=api_key)
-    
-    # Prepare documents for Claude
-    docs_formatted = ""
-    for filename, content in documents_content.items():
-        doc_type = categorize_document(filename, content)
-        docs_formatted += f"\n\n--- DOCUMENT: {filename} (Type: {doc_type}) ---\n{content[:10000]}"  # Limiting content length
-    
-    # Extract budget information separately for more detailed analysis
-    budget_data = extract_budget_info(documents_content)
-    
-    budget_info = ""
-    if budget_data["total_budget"] is not None:
-        budget_info = f"\nTotal Budget: ${budget_data['total_budget']:,.2f}"
-        if budget_data["spent"] is not None:
-            budget_info += f"\nSpent: ${budget_data['spent']:,.2f}"
-            budget_info += f"\nRemaining: ${budget_data['remaining']:,.2f}"
-            budget_info += f"\nStatus: {budget_data['over_under']}spend"
-    
-    # Prompt for Claude
-    prompt = f"""
-    You are a project management expert reviewing project documentation. Analyze the provided project documents looking for these key aspects:
-    
-    1. Scope creep indicators
-    2. Dependency mapping quality
-    3. Objective and goal setting quality
-    4. Budget restrictions and constraints
-    5. Planning quality
-    6. Key risks and issues
-    
-    Based on your analysis, provide the following outputs:
-    
-    1. Scope Creep: List specific instances of potential scope creep you identified (as bullet points)
-    2. Dependency Mapping: Score the quality from 1-10 and explain your reasoning
-    3. Objective Setting: Score the quality from 1-10 and provide examples of good/poor objectives
-    4. Budget Analysis: Analyze the budget information: {budget_info}
-    5. Planning Quality: Score the quality from 1-10 and explain your reasoning
-    6. Risks & Issues: Identify the top 5 risks and issues
-    7. Project Status: Based on your analysis, determine if the project should be classified as:
-       - GREEN (on track)
-       - AMBER (at risk)
-       - RED (critical issues)
-       Provide a brief justification for this status.
-    
-    Format your response as a JSON object with these keys: 
-    scope_creep_items (array), 
-    dependency_mapping_score (number), 
-    dependency_mapping_reasoning (string), 
-    objective_setting_score (number), 
-    objective_setting_reasoning (string), 
-    objective_examples (object with good and poor keys), 
-    budget_analysis (string), 
-    planning_quality_score (number), 
-    planning_quality_reasoning (string), 
-    top_risks_issues (array), 
-    project_status (string), 
-    status_justification (string)
-    
-    Documents to analyze:
-    {docs_formatted}
-    """
-    
-    # Call Claude API
     try:
+        # Create client without extra parameters that might cause issues
+        client = anthropic.Client(api_key=api_key)
+        
+        # Prepare documents for Claude
+        docs_formatted = ""
+        for filename, content in documents_content.items():
+            doc_type = categorize_document(filename, content)
+            docs_formatted += f"\n\n--- DOCUMENT: {filename} (Type: {doc_type}) ---\n{content[:10000]}"  # Limiting content length
+        
+        # Extract budget information separately for more detailed analysis
+        budget_data = extract_budget_info(documents_content)
+        
+        budget_info = ""
+        if budget_data["total_budget"] is not None:
+            budget_info = f"\nTotal Budget: ${budget_data['total_budget']:,.2f}"
+            if budget_data["spent"] is not None:
+                budget_info += f"\nSpent: ${budget_data['spent']:,.2f}"
+                budget_info += f"\nRemaining: ${budget_data['remaining']:,.2f}"
+                budget_info += f"\nStatus: {budget_data['over_under']}spend"
+        
+        # Prompt for Claude
+        prompt = f"""
+        You are a project management expert reviewing project documentation. Analyze the provided project documents looking for these key aspects:
+        
+        1. Scope creep indicators
+        2. Dependency mapping quality
+        3. Objective and goal setting quality
+        4. Budget restrictions and constraints
+        5. Planning quality
+        6. Key risks and issues
+        
+        Based on your analysis, provide the following outputs:
+        
+        1. Scope Creep: List specific instances of potential scope creep you identified (as bullet points)
+        2. Dependency Mapping: Score the quality from 1-10 and explain your reasoning
+        3. Objective Setting: Score the quality from 1-10 and provide examples of good/poor objectives
+        4. Budget Analysis: Analyze the budget information: {budget_info}
+        5. Planning Quality: Score the quality from 1-10 and explain your reasoning
+        6. Risks & Issues: Identify the top 5 risks and issues
+        7. Project Status: Based on your analysis, determine if the project should be classified as:
+           - GREEN (on track)
+           - AMBER (at risk)
+           - RED (critical issues)
+           Provide a brief justification for this status.
+        
+        Format your response as a JSON object with these keys: 
+        scope_creep_items (array), 
+        dependency_mapping_score (number), 
+        dependency_mapping_reasoning (string), 
+        objective_setting_score (number), 
+        objective_setting_reasoning (string), 
+        objective_examples (object with good and poor keys), 
+        budget_analysis (string), 
+        planning_quality_score (number), 
+        planning_quality_reasoning (string), 
+        top_risks_issues (array), 
+        project_status (string), 
+        status_justification (string)
+        
+        Documents to analyze:
+        {docs_formatted}
+        """
+        
+        # Call Claude API
+        model = "claude-3-sonnet-20240229"
+        # Try to use model from secrets if available
+        try:
+            if "ANTHROPIC_MODEL" in st.secrets:
+                model = st.secrets["ANTHROPIC_MODEL"]
+        except:
+            pass
+            
         response = client.completion(
             prompt=f"\n\nHuman: {prompt}\n\nAssistant:",
-#            model="claude-3-sonnet-20240229",
-            model=st.secrets["ANTHROPIC_MODEL"],
+            model=model,
             max_tokens_to_sample=4000,
             temperature=0
         )
@@ -454,10 +462,19 @@ def get_score_class(score):
 st.title("Project Health Analysis")
 st.markdown("Upload project documents to analyze key project management indicators")
 
-# Sidebar for API Key
+# Sidebar configuration - Handle API key from secrets or input
 with st.sidebar:
     st.header("Configuration")
-    api_key = st.secrets["ANTHROPIC_API_KEY"]
+    
+    # Try to get API key from secrets
+    try:
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            api_key = st.secrets["ANTHROPIC_API_KEY"]
+            st.success("✅ API key loaded from secrets")
+        else:
+            api_key = st.text_input("Anthropic API Key", value=st.session_state.api_key, type="password")
+    except:
+        api_key = st.text_input("Anthropic API Key", value=st.session_state.api_key, type="password")
     
     if api_key != st.session_state.api_key:
         st.session_state.api_key = api_key
@@ -588,7 +605,7 @@ Generated on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 
 # Instructions if no files uploaded
 if not uploaded_files and not st.session_state.analysis_results:
-    st.info("👈 Start by uploading your project documents and entering your Anthropic API Key")
+    st.info("👈 Start by uploading your project documents")
     
     with st.expander("Sample Project Documents"):
         st.markdown("""

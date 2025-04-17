@@ -243,7 +243,7 @@ def extract_budget_info(documents_content):
 
 def analyze_project_with_claude(api_key, documents_content):
     """Send project documents to Claude for analysis."""
-    client = anthropic.Anthropic(api_key=api_key)
+    client = anthropic.Client(api_key=api_key)
     
     # Prepare documents for Claude
     docs_formatted = ""
@@ -307,18 +307,15 @@ def analyze_project_with_claude(api_key, documents_content):
     
     # Call Claude API
     try:
-        response = client.messages.create(
-            model="claude-3-5-sonnet-20240422",
-            max_tokens=4000,
-            temperature=0,
-            system="You are a project management expert analyzing project documentation. Provide clear, objective analysis based only on the facts presented.",
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+        response = client.completion(
+            prompt=f"\n\nHuman: {prompt}\n\nAssistant:",
+            model="claude-3-sonnet-20240229",
+            max_tokens_to_sample=4000,
+            temperature=0
         )
         
         # Extract and parse JSON from response
-        response_text = response.content[0].text
+        response_text = response.completion
         
         # Look for JSON object in the response
         json_start = response_text.find('{')

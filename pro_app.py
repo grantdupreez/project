@@ -60,7 +60,7 @@ def logout():
     # Reset the password_correct flag to False
     st.session_state["password_correct"] = False
     # Rerun the app to show the login form
-    st.experimental_rerun()
+    st.rerun()
 
 def clear_analysis():
     """Clear the analysis results and uploaded documents."""
@@ -70,7 +70,7 @@ def clear_analysis():
         st.session_state.analysis_results = None
     if 'budget_data' in st.session_state:
         st.session_state.budget_data = None
-    st.experimental_rerun()
+    st.rerun()
 
 if not check_password():
     st.stop()
@@ -636,7 +636,7 @@ if uploaded_files:
                         st.session_state.analysis_results = analysis_results
                         st.session_state.budget_data = budget_data
                         st.success("Analysis complete!")
-                        st.experimental_rerun()
+                        st.rerun()
 
 # Display Results Section
 if st.session_state.analysis_results:

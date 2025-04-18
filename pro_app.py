@@ -60,7 +60,7 @@ def logout():
     # Reset the password_correct flag to False
     st.session_state["password_correct"] = False
     # Rerun the app to show the login form
-    st.rerun()
+    st.experimental_rerun()
 
 def clear_analysis():
     """Clear the analysis results and uploaded documents."""
@@ -70,7 +70,7 @@ def clear_analysis():
         st.session_state.analysis_results = None
     if 'budget_data' in st.session_state:
         st.session_state.budget_data = None
-    st.rerun()
+    st.experimental_rerun()
 
 if not check_password():
     st.stop()
@@ -636,7 +636,7 @@ if uploaded_files:
                         st.session_state.analysis_results = analysis_results
                         st.session_state.budget_data = budget_data
                         st.success("Analysis complete!")
-                        st.rerun()
+                        st.experimental_rerun()
 
 # Display Results Section
 if st.session_state.analysis_results:
@@ -647,58 +647,100 @@ if st.session_state.analysis_results:
     # Add download button for report
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Create a formatted report for download
-    report_md = f"""# Project Health Analysis Report
-Generated on {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-
-## Project Status: {st.session_state.analysis_results.get('project_status', 'UNKNOWN')}
-{st.session_state.analysis_results.get('status_justification', '')}
-
-## Scores
-- Dependency Mapping: {st.session_state.analysis_results.get('dependency_mapping_score', 0)}/10
-- Objective Setting: {st.session_state.analysis_results.get('objective_setting_score', 0)}/10
-- Planning Quality: {st.session_state.analysis_results.get('planning_quality_score', 0)}/10
-
-## Scope Creep Items
-"""
+    # Create a formatted report for download - using a safer string building approach
+    report_md = "# Project Health Analysis Report\n"
+    report_md += f"Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
     
-    for item in st.session_state.analysis_results.get('scope_creep_items', []):
-        report_md += f"- {item}\n"
+    # Project status
+    report_md += f"## Project Status: {st.session_state.analysis_results.get('project_status', 'UNKNOWN')}\n"
+    status_justification = st.session_state.analysis_results.get('status_justification', '')
+    if status_justification:
+        report_md += f"{status_justification}\n\n"
     
+    # Scores
+    report_md += "## Scores\n"
+    report_md += f"- Dependency Mapping: {st.session_state.analysis_results.get('dependency_mapping_score', 0)}/10\n"
+    report_md += f"- Objective Setting: {st.session_state.analysis_results.get('objective_setting_score', 0)}/10\n"
+    report_md += f"- Planning Quality: {st.session_state.analysis_results.get('planning_quality_score', 0)}/10\n\n"
+    
+    # Scope Creep Items
+    report_md += "## Scope Creep Items\n"
+    scope_creep_items = st.session_state.analysis_results.get('scope_creep_items', [])
+    if scope_creep_items:
+        for item in scope_creep_items:
+            if item:  # Check if item is not empty
+                report_md += f"- {item}\n"
+    else:
+        report_md += "No scope creep items identified.\n"
+    
+    # Risks and Issues
     report_md += "\n## Top Risks and Issues\n"
+    top_risks = st.session_state.analysis_results.get('top_risks_issues', [])
+    if top_risks:
+        for i, item in enumerate(top_risks, 1):
+            if item:  # Check if item is not empty
+                report_md += f"{i}. {item}\n"
+    else:
+        report_md += "No significant risks or issues identified.\n"
     
-    for i, item in enumerate(st.session_state.analysis_results.get('top_risks_issues', []), 1):
-        report_md += f"{i}. {item}\n"
-    
-    report_md += f"\n## Budget Analysis\n"
-    if st.session_state.budget_data and st.session_state.budget_data["total_budget"] is not None:
+    # Budget Analysis
+    report_md += "\n## Budget Analysis\n"
+    if st.session_state.budget_data and st.session_state.budget_data.get("total_budget") is not None:
         report_md += f"Total Budget: ${st.session_state.budget_data['total_budget']:,.2f}\n"
-        if st.session_state.budget_data["spent"] is not None:
+        if st.session_state.budget_data.get("spent") is not None:
             report_md += f"Spent to Date: ${st.session_state.budget_data['spent']:,.2f}\n"
             report_md += f"Remaining: ${st.session_state.budget_data['remaining']:,.2f}\n"
             report_md += f"Status: {st.session_state.budget_data['over_under'].upper()}SPEND\n"
     else:
-        report_md += f"{st.session_state.analysis_results.get('budget_analysis', 'No budget information available')}\n"
+        budget_analysis = st.session_state.analysis_results.get('budget_analysis', '')
+        report_md += f"{budget_analysis if budget_analysis else 'No budget information available'}\n"
     
-    report_md += f"\n## Dependency Mapping Analysis\n{st.session_state.analysis_results.get('dependency_mapping_reasoning', '')}\n"
-    report_md += f"\n## Objective Setting Analysis\n{st.session_state.analysis_results.get('objective_setting_reasoning', '')}\n"
+    # Dependency Mapping Analysis
+    dependency_mapping_reasoning = st.session_state.analysis_results.get('dependency_mapping_reasoning', '')
+    if dependency_mapping_reasoning:
+        report_md += f"\n## Dependency Mapping Analysis\n{dependency_mapping_reasoning}\n"
     
+    # Objective Setting Analysis
+    objective_setting_reasoning = st.session_state.analysis_results.get('objective_setting_reasoning', '')
+    if objective_setting_reasoning:
+        report_md += f"\n## Objective Setting Analysis\n{objective_setting_reasoning}\n"
+    
+    # Good Objectives Examples
     report_md += "\n### Good Objectives Examples\n"
-    for ex in st.session_state.analysis_results.get('objective_examples', {}).get('good', []):
-        report_md += f"- {ex}\n"
+    good_objectives = st.session_state.analysis_results.get('objective_examples', {}).get('good', [])
+    if good_objectives:
+        for ex in good_objectives:
+            if ex:  # Check if example is not empty
+                report_md += f"- {ex}\n"
+    else:
+        report_md += "No good objectives examples identified.\n"
     
+    # Poor Objectives Examples
     report_md += "\n### Poor Objectives Examples\n"
-    for ex in st.session_state.analysis_results.get('objective_examples', {}).get('poor', []):
-        report_md += f"- {ex}\n"
+    poor_objectives = st.session_state.analysis_results.get('objective_examples', {}).get('poor', [])
+    if poor_objectives:
+        for ex in poor_objectives:
+            if ex:  # Check if example is not empty
+                report_md += f"- {ex}\n"
+    else:
+        report_md += "No poor objectives examples identified.\n"
     
-    report_md += f"\n## Planning Quality Analysis\n{st.session_state.analysis_results.get('planning_quality_reasoning', '')}\n"
+    # Planning Quality Analysis
+    planning_quality_reasoning = st.session_state.analysis_results.get('planning_quality_reasoning', '')
+    if planning_quality_reasoning:
+        report_md += f"\n## Planning Quality Analysis\n{planning_quality_reasoning}\n"
     
-    st.download_button(
-        label="Download Report",
-        data=report_md,
-        file_name=f"project_health_report_{timestamp}.md",
-        mime="text/markdown"
-    )
+    # Safe download button that handles potential None values
+    try:
+        st.download_button(
+            label="Download Report",
+            data=report_md,
+            file_name=f"project_health_report_{timestamp}.md",
+            mime="text/markdown"
+        )
+    except Exception as e:
+        st.error(f"Error generating download: {str(e)}")
+        st.info("Please try again or copy the report content manually.")
 
 # Instructions if no files uploaded
 if not uploaded_files and not st.session_state.analysis_results:
